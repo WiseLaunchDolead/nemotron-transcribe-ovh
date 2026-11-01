@@ -76,6 +76,7 @@ jobs:
           load: true
           push: false
           tags: nemotron-cli-verify:local
+          cache-from: type=gha
       - name: Check image as OVHcloud UID (no model download or GPU)
         env:
           IMAGE: ${{ steps.names.outputs.tag }}

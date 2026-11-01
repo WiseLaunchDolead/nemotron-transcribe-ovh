@@ -43,8 +43,10 @@ ENTRYPOINT ["/opt/app/start.sh"]
 # CI-only target: the real CUDA driver is injected by OVH on a GPU host.
 # A toolkit stub lets a CPU runner exercise CLI parsing without pretending to infer.
 # Never publish this target: production must resolve the real driver.
+FROM nvidia/cuda:12.8.1-devel-ubuntu24.04@sha256:520292dbb4f755fd360766059e62956e9379485d9e073bbd2f6e3c20c270ed66 AS driver-stub
+
 FROM service AS verify
-COPY --from=builder /usr/local/cuda/lib64/stubs/libcuda.so /opt/cuda-stubs/libcuda.so.1
+COPY --from=driver-stub /usr/local/cuda/lib64/stubs/libcuda.so /opt/cuda-stubs/libcuda.so.1
 ENV LD_LIBRARY_PATH="/opt/cuda-stubs:${LD_LIBRARY_PATH}"
 
 # Keep the safe, real-driver image as the default Docker build target.
