@@ -126,6 +126,22 @@ client par locuteur et pause si nécessaire.
 
 ## Limites
 
+Pour les enregistrements de 29 à 60 minutes, après validation du pic mémoire sur
+un fichier court, garder `max_sequences=4` et augmenter le contexte partagé :
+
+```yaml
+asr:
+  salm:
+    max_sequences: 4
+    n_ctx_per_sequence: 18432
+    max_context: 73728
+```
+
+Ces valeurs sont aussi disponibles via `NEMO_SPEECH_ASR_SALM_N_CTX_PER_SEQUENCE=18432`
+et `NEMO_SPEECH_ASR_SALM_MAX_CONTEXT=73728`. Un WAV mono PCM16 à 16 kHz d'une heure
+reste sous le plafond d'upload de 128 Mio. La mémoire et le temps d'inférence de ce
+profil doivent être mesurés avant de le retenir comme configuration de service.
+
 - La diarisation change le prompt : le texte peut perdre ponctuation et majuscules. Pour un prompt personnalisé, voir l'API chat dans le guide SALM.
 - Un alignement raté peut rendre le texte sans mots horodatés ; le test échoue dans ce cas.
 - Le serveur NVIDIA est présenté comme destiné à l'intégration directe. Valider charge, isolation et erreurs avant production.

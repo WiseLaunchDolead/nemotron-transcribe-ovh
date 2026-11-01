@@ -83,6 +83,15 @@ jobs:
           test "$(docker image inspect "$IMAGE" --format '{{.Architecture}}')" = amd64
           test "$(docker run --rm --entrypoint id "$IMAGE" -u)" = 42420
           docker run --rm --user 42420:42420 nemotron-cli-verify:local --check
+          # Parsing must reach the expected missing-model error, not an unknown YAML key.
+          if docker run --rm --entrypoint nemo-speech nemotron-cli-verify:local \
+            serve --config /opt/app/config.yaml --asr-model /__ci_missing_model__.gguf \
+            > config-check.log 2>&1; then
+            echo 'ERROR: configuration check unexpectedly started a model' >&2
+            exit 1
+          fi
+          cat config-check.log
+          grep -q 'ASR model.*__ci_missing_model__' config-check.log
           docker run --rm --entrypoint bash "$IMAGE" -c 'test -w /workspace/models'
           if docker run --rm "$IMAGE"; then
             echo 'ERROR: service accepted startup without an API key' >&2
