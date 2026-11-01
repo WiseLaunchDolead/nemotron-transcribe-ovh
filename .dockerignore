@@ -1,0 +1,7 @@
+**
+!Dockerfile
+!start.sh
+!config.yaml
+!models.lock.json
+!scripts/
+!scripts/download_models.py
