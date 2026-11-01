@@ -1,0 +1,24 @@
+http:
+  playground: false
+  threads: 16
+  max-upload-mb: 128
+  read-timeout: 120
+  write-timeout: 120
+  access-log: false
+asr:
+  model:
+    name: nemotron-transcribe
+  backend:
+    gpu: 0
+  batching:
+    enabled: true
+    max_queue_depth: 8
+  salm:
+    # Initial validation profile: pooled context of 32768 cells, ~29 min maximum.
+    max_sequences: 4
+    n_ctx_per_sequence: 8192
+    max_context: 32768
+    n_batch: 1024
+    encoder_max_batch: 4
+    encoder_ahead_seconds: 1800
+    mtp_draft: 0

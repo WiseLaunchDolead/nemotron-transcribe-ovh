@@ -1,0 +1,109 @@
+name: Build and publish CUDA image
+on:
+  push:
+    branches: [main, feat/cloud-build-scaffold]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+concurrency:
+  group: cuda-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+      - run: bash -n start.sh
+      - run: python -m unittest discover -s tests -v
+  image:
+    if: github.event_name != 'pull_request'
+    needs: checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - name: Image names
+        id: names
+        env:
+          REPOSITORY: ${{ github.repository }}
+          REF: ${{ github.ref }}
+          COMMIT: ${{ github.sha }}
+        run: |
+          IMAGE="ghcr.io/${REPOSITORY,,}"
+          echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
+          echo "tag=$IMAGE:sha-$COMMIT" >> "$GITHUB_OUTPUT"
+          if [[ "$REF" == refs/heads/main ]]; then
+            echo "alias=$IMAGE:main" >> "$GITHUB_OUTPUT"
+          else
+            echo "alias=$IMAGE:candidate" >> "$GITHUB_OUTPUT"
+          fi
+      - if: github.event_name != 'pull_request'
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build CUDA 12.8 / L40S
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          target: runtime
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: |
+            ${{ steps.names.outputs.tag }}
+            ${{ steps.names.outputs.alias }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Prepare CPU-only CLI verification (never published)
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          target: verify
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: nemotron-cli-verify:local
+          cache-from: type=gha
+      - name: Check image as OVHcloud UID (no model download or GPU)
+        env:
+          IMAGE: ${{ steps.names.outputs.tag }}
+        run: |
+          test "$(docker image inspect "$IMAGE" --format '{{.Architecture}}')" = amd64
+          test "$(docker run --rm --entrypoint id "$IMAGE" -u)" = 42420
+          docker run --rm --user 42420:42420 nemotron-cli-verify:local --check
+          # Parsing must reach the expected missing-model error, not an unknown YAML key.
+          if docker run --rm --entrypoint nemo-speech nemotron-cli-verify:local \
+            serve --config /opt/app/config.yaml --asr-model /__ci_missing_model__.gguf \
+            > config-check.log 2>&1; then
+            echo 'ERROR: configuration check unexpectedly started a model' >&2
+            exit 1
+          fi
+          cat config-check.log
+          grep -q 'ASR model.*__ci_missing_model__' config-check.log
+          docker run --rm --entrypoint bash "$IMAGE" -c 'test -w /workspace/models'
+          if docker run --rm "$IMAGE"; then
+            echo 'ERROR: service accepted startup without an API key' >&2
+            exit 1
+          fi
+      - name: Publish checked image
+        if: github.event_name != 'pull_request'
+        env:
+          IMAGE: ${{ steps.names.outputs.tag }}
+          ALIAS: ${{ steps.names.outputs.alias }}
+        run: |
+          docker push "$IMAGE"
+          docker push "$ALIAS"
+          echo "Published: \`$IMAGE\` and \`$ALIAS\`" >> "$GITHUB_STEP_SUMMARY"
