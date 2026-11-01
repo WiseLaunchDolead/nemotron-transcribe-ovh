@@ -58,6 +58,7 @@ jobs:
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
+          target: runtime
           platforms: linux/amd64
           load: true
           push: false
@@ -66,13 +67,22 @@ jobs:
             ${{ steps.names.outputs.alias }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+      - name: Prepare CPU-only CLI verification (never published)
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          target: verify
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: nemotron-cli-verify:local
       - name: Check image as OVHcloud UID (no model download or GPU)
         env:
           IMAGE: ${{ steps.names.outputs.tag }}
         run: |
           test "$(docker image inspect "$IMAGE" --format '{{.Architecture}}')" = amd64
           test "$(docker run --rm --entrypoint id "$IMAGE" -u)" = 42420
-          docker run --rm --user 42420:42420 "$IMAGE" --check
+          docker run --rm --user 42420:42420 nemotron-cli-verify:local --check
           docker run --rm --entrypoint bash "$IMAGE" -c 'test -w /workspace/models'
           if docker run --rm "$IMAGE"; then
             echo 'ERROR: service accepted startup without an API key' >&2

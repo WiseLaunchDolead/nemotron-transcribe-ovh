@@ -5,6 +5,8 @@ import json
 import math
 import os
 from pathlib import Path
+import ssl
+import sys
 import time
 import urllib.error
 import urllib.request
@@ -46,7 +48,13 @@ def run(url, audio, token, timeout, output, min_speakers):
     class NoRedirect(urllib.request.HTTPRedirectHandler):
         def redirect_request(self, *args, **kwargs):
             return None
-    client = urllib.request.build_opener(NoRedirect)
+    # Python.org's macOS installation may not have its own CA bundle populated.
+    # Use the system CA bundle when present; certificate verification stays enabled.
+    ca_file = os.environ.get("SSL_CERT_FILE")
+    if not ca_file and sys.platform == "darwin" and Path("/etc/ssl/cert.pem").is_file():
+        ca_file = "/etc/ssl/cert.pem"
+    context = ssl.create_default_context(cafile=ca_file)
+    client = urllib.request.build_opener(NoRedirect, urllib.request.HTTPSHandler(context=context))
 
     def get(path, authenticated=True):
         headers = {"Authorization": "Bearer " + token} if authenticated else {}

@@ -44,7 +44,7 @@ avant de sélectionner une image publique. Aucun secret HF/OVH dans GitHub Actio
 | Port | 8080 |
 | Accès | **Restreint** |
 | Variable | `AUTH_MODE=ovh` |
-| Label | `app=nemotron-transcribe` |
+| Label | `app=nemotron` (valeur limitée à 15 caractères dans la console) |
 | Readiness probe | `/ready`, port 8080 |
 | Scaling après validation | min 0, max 1 |
 | Modèles | au moins 25 Go libres à `/workspace/models` |
@@ -55,9 +55,16 @@ en-tête `Authorization`. Créer un jeton AI régional GRA limité au label et a
 minimal permettant les appels. **Ne jamais rendre publique une app dans ce mode.**
 Les probes internes n'ont pas besoin de jeton.
 
+Si la console ne propose pas de champ de variable d'environnement, configurer la
+commande Docker `env AUTH_MODE=ovh /opt/app/start.sh` et vérifier sa prise en compte
+dans l'équivalent CLI avant de commander.
+
 Hors accès restreint OVH, utiliser le mode par défaut `AUTH_MODE=api-key` avec le
 secret `NEMO_SPEECH_HTTP_API_KEY`. Le démarrage sans clé est alors refusé.
 `--check` vérifie les binaires sans serveur, GPU ou téléchargement.
+Sur un runner CPU, cette vérification utilise la cible Docker `verify`, qui contient
+le stub du pilote CUDA officiel dans un chemin réservé aux tests. Cette cible n'est
+jamais publiée ; la cible `runtime` utilise le vrai pilote fourni par OVH.
 
 Le démarrage vérifie la présence du GPU, télécharge la paire publique figée,
 reprend les téléchargements interrompus et vérifie tailles et SHA-256 avant de
@@ -67,7 +74,9 @@ explicite. `MODEL_DIR` permet de choisir un volume monté.
 Le cache local est **éphémère** ; sa conservation après passage à zéro n'est pas
 garantie. Pour des réveils réguliers, précharger la paire vérifiée dans un bucket
 Object Storage GRA, puis monter ce bucket avec cache OVH. Le stockage est facturé
-séparément. Un premier essai sur disque éphémère permettra de mesurer le coût à froid.
+séparément. Prévoir un montage en lecture/écriture accessible à l'UID 42420 : le
+téléchargeur crée un fichier de verrou même lorsque les poids sont préchargés.
+Un premier essai sur disque éphémère permettra de mesurer le coût à froid.
 
 La readiness arrive après téléchargement, chargement et warmup. Le `HEALTHCHECK`
 Docker prévoit 30 minutes de grâce ; cela ne configure pas les probes OVH. Adapter
@@ -138,7 +147,7 @@ bash -n start.sh
 Modèle : [OpenMDW-1.1](https://huggingface.co/AtomicChat/NVIDIA-Nemotron-3.5-Transcribe-30B-A4B-GGUF/blob/dbd06c5cad7a2f33c8e06be2fb3ef814dbd9aa59/LICENSE).
 Les notices runtime sont conservées dans `/opt/nemo/share`.
 
-Sources OVH : [UID et image](https://docs.ovhcloud.com/en/guides/public-cloud/ai-machine-learning/ai-deploy-tuto-build-custom-image),
+Sources OVH : [UID et image](https://support.us.ovhcloud.com/hc/en-us/articles/37138294111251-AI-Deploy-Tutorial-Build-use-a-custom-Docker-image),
 [accès](https://docs.ovhcloud.com/en/guides/public-cloud/ai-machine-learning/ai-deploy-getting-started),
 [autoscaling](https://docs.ovhcloud.com/en/guides/public-cloud/ai-machine-learning/ai-deploy-apps-deployments),
 [facturation](https://docs.ovhcloud.com/fr/guides/public-cloud/ai-machine-learning/ai-deploy-billing).

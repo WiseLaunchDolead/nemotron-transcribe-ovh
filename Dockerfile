@@ -19,7 +19,7 @@ RUN scripts/configure.sh cuda-server \
     && cmake --build --preset cuda-server --parallel "${BUILD_JOBS}" \
     && cmake --install build/cuda-server
 
-FROM nvidia/cuda:12.8.1-runtime-ubuntu24.04@sha256:ebef3c171eeef0298e4eb2e4be843105edf3b8b0ac45e0b43acee358e8046867
+FROM nvidia/cuda:12.8.1-runtime-ubuntu24.04@sha256:ebef3c171eeef0298e4eb2e4be843105edf3b8b0ac45e0b43acee358e8046867 AS service
 LABEL org.opencontainers.image.source="https://github.com/WiseLaunchDolead/nemotron-transcribe-ovh" \
     org.opencontainers.image.description="Nemotron Transcribe IQ4_NL prototype for OVHcloud L40S"
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -39,3 +39,13 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30m --retries=3 \
     CMD curl --fail --silent --max-time 4 http://127.0.0.1:8080/ready || exit 1
 ENTRYPOINT ["/opt/app/start.sh"]
+
+# CI-only target: the real CUDA driver is injected by OVH on a GPU host.
+# A toolkit stub lets a CPU runner exercise CLI parsing without pretending to infer.
+# Never publish this target: production must resolve the real driver.
+FROM service AS verify
+COPY --from=builder /usr/local/cuda/lib64/stubs/libcuda.so /opt/cuda-stubs/libcuda.so.1
+ENV LD_LIBRARY_PATH="/opt/cuda-stubs:${LD_LIBRARY_PATH}"
+
+# Keep the safe, real-driver image as the default Docker build target.
+FROM service AS runtime
